@@ -15,9 +15,10 @@ function App() {
 
   const fetchData = () => {
     axios
-      .get('http://127.0.0.1:5000//data')
+      .get('http://127.0.0.1:5000/data')
       .then((response) => {
         setData(response.data);
+        console.log(response)
         setError(null);
       })
       .catch((error) => {
@@ -34,7 +35,7 @@ function App() {
     e.preventDefault();
 
     axios
-      .post('http://127.0.0.1:5000//data', formData)
+      .post('http://127.0.0.1:5000/data', formData)
       .then(() => {
         fetchData(); // Refresh the data after successful submission
         setFormData({}); // Clear the form data
@@ -47,7 +48,7 @@ function App() {
   const deleteRow = (index) => {
     const rowToDelete = data[index];
     axios
-      .delete('http://127.0.0.1:5000//data', { data: rowToDelete })
+      .delete('http://127.0.0.1:5000/data', { data: rowToDelete })
       .then(() => {
         fetchData(); // Refresh the data after successful deletion
         console.log('Row deleted');
@@ -61,7 +62,7 @@ function App() {
     if (editableRowIndex === index) {
       // Save the updated values to the database
       axios
-        .put('http://127.0.0.1:5000//data', data[index])
+        .put('http://127.0.0.1:5000/data', data[index])
         .then(() => {
           fetchData(); // Refresh the data after successful update
           console.log('Row updated');

@@ -2,8 +2,10 @@ from flask import Flask, request, jsonify
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 import pandas as pd
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 
 
 # MongoDB connection
@@ -47,11 +49,15 @@ def create_data():
 @app.route('/data', methods=['GET'])
 def get_all_data():
     try:
+        print("INSIDE GET")
         data = list(collection.find())
+        print(data)
         # Convert ObjectId to string representation
         data = [{**item, '_id': str(item['_id'])} for item in data]
+        print(jsonify(data))
         return jsonify(data)
     except Exception as e:
+        print(e)
         return jsonify({'error': str(e)}), 500
 
 @app.route('/data/<data_id>', methods=['GET'])
