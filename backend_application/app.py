@@ -1,144 +1,96 @@
-from bson import objectid, json_util
-from flask import Flask, Response, request, json, jsonify
+from flask import Flask, request, jsonify
 from pymongo import MongoClient
-import logging as log
-
-# set up logging
-log.basicConfig(
-    filename='app.log', 
-    filemode='a', 
-    level=log.DEBUG, 
-    format='%(asctime)s %(levelname)s:\n%(message)s\n'
-)
+from bson.objectid import ObjectId
+import pandas as pd
 
 app = Flask(__name__)
 
-# MongoDB Connection
-db = MongoClient('mongodb://localhost:27017/')
-db = db['local']
+
+# MongoDB connection
+client = MongoClient('mongodb://localhost:27017/')
+db = client['local']
 collection = db['sample_sheets']
 
+@app.route('/extract-and-store', methods=['POST'])
+def extract_and_store_data():
+    try:
+        # Get the file path and sheet name from the request
+        file_path = request.form.get('file_path')
+        sheet_name = request.form.get('sheet_name')
 
-class MongoAPI:
-    def __init__(self):
-        # self.client = MongoClient("mongodb://localhost:27017/")
-        self.db = db
-        self.collection = collection
-        self.logger = log.getLogger(__name__)
+        # Read the Excel file and extract the data
+        df = pd.read_excel(file_path, sheet_name=sheet_name)
 
-    def read_all(self):
-        self.logger.debug('Reading All Data')
-        documents = self.collection.find()
-        output = [
-            {
-                item: data[item] if item != '_id' else str(data[item]) for item in data
-            }
-            for data in documents
-        ]
-        return output
+        df = df.replace({pd.NaT: None})
 
-    def read_one(self, document_id):
-        self.logger.debug(f'Reading Data for ID: {document_id}')
-        document_id = objectid.ObjectId(document_id)
-        document = self.collection.find_one({'_id': document_id})
-        if document:
-            output = {item: document[item] if item != '_id' else str(document[item]) for item in document}
-            return output
+        data = df.to_dict(orient='records')
+
+        # Insert the extracted data into the MongoDB collection
+        result = collection.insert_many(data)
+
+        return f"Data extracted and stored in MongoDB. Inserted {len(result.inserted_ids)} documents."
+    except Exception as e:
+        return f"Error occurred while extracting and storing data: {e}"
+
+
+# Create
+@app.route('/data', methods=['POST'])
+def create_data():
+    try:
+        data = request.get_json()
+        result = collection.insert_one(data)
+        return jsonify({'message': 'Data created', 'id': str(result.inserted_id)})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Read
+@app.route('/data', methods=['GET'])
+def get_all_data():
+    try:
+        data = list(collection.find())
+        # Convert ObjectId to string representation
+        data = [{**item, '_id': str(item['_id'])} for item in data]
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/data/<data_id>', methods=['GET'])
+def get_data(data_id):
+    try:
+        data = collection.find_one({'_id': ObjectId(data_id)})
+        if data:
+            # Convert ObjectId to string representation
+            data['_id'] = str(data['_id'])
+            return jsonify(data)
         else:
-            return {'Status': 'Document not found.'}
+            return jsonify({'message': 'Data not found'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-    def write(self, data):
-        self.logger.debug('Writing Data')
-        response = self.collection.insert_one(data)
-        output = {'Status': 'Successfully Inserted',
-                  'Document_ID': str(response.inserted_id)}
-        return output
+# Update
+@app.route('/data/<data_id>', methods=['PUT'])
+def update_data(data_id):
+    try:
+        data = request.get_json()
+        result = collection.update_one({'_id': ObjectId(data_id)}, {'$set': data})
+        if result.modified_count > 0:
+            return jsonify({'message': 'Data updated'})
+        else:
+            return jsonify({'message': 'Data not found'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-    def update(self, document_id, data):
-        self.logger.debug(f'Updating Data for ID: {document_id}')
-        document_id = objectid.ObjectId(document_id)
-        document = self.collection.find_one({'_id': document_id})
-        if not document:
-            return {'Status': 'Document not found.'}
-        filt = {'_id': document_id}
-        updated_data = {"$set": data}
-        response = self.collection.update_one(filt, updated_data)
-        output = {'Status': 'Successfully Updated' if response.modified_count > 0 else "Nothing was updated."}
-        return output
+# Delete
+@app.route('/data/<data_id>', methods=['DELETE'])
+def delete_data(data_id):
+    try:
+        result = collection.delete_one({'_id': ObjectId(data_id)})
+        if result.deleted_count > 0:
+            return jsonify({'message': 'Data deleted'})
+        else:
+            return jsonify({'message': 'Data not found'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-    def delete(self, document_id):
-        self.logger.debug(f'Deleting Data for ID: {document_id}')
-        document_id = objectid.ObjectId(document_id)
-        response = self.collection.delete_one({'_id': document_id})
-        output = {'Status': 'Successfully Deleted' if response.deleted_count > 0 else "Document not found."}
-        return output
-
-
-
-@app.route('/')
-def base():
-    return Response(response=json.dumps({"Status": "Running"}),
-                    status=200,
-                    mimetype='application/json')
-
-
-
-# create a route to read all documents
-@app.route('/read/', methods=['GET'])
-def read():
-    print("Reading Data")
-    response = MongoAPI().read_all()
-    # print(response)
-    return Response(response=json.dumps(response),
-                        status=200,
-                        mimetype='application/json')
-
-
-# create a route to read one document based on its ID
-@app.route('/read/<document_id>/', methods=['GET'])
-def read_one(document_id):
-    print("Finding Document with Document ID:", document_id)
-    # print(document_id)
-    response = MongoAPI().read_one(document_id)
-    return Response(response=json.dumps(response),
-                    status=200,
-                    mimetype='application/json')
-
-
-@app.route('/write/', methods=['POST'])
-def write():
-    print("Writing Data")
-    data = request.form.to_dict()  # convert multidict to dict
-    # data = request.get_json()  # extract JSON data from request body
-    print(data)
-    response = MongoAPI().write(data)  # store data in MongoDB collection
-    return Response(response=json.dumps(response),
-                    status=201,
-                    mimetype='application/json')
-
-
-# create a route to update one document based on its ID
-@app.route('/update/<document_id>/', methods=['PUT'])
-def update(document_id):
-    print("Updating Data with Document ID:", document_id)
-    data = request.form.to_dict() # convert multidict to dict
-    print(data)
-    response = MongoAPI().update(document_id, data)  # update document in MongoDB collection
-    return Response(response=json.dumps(response),
-                    status=200,
-                    mimetype='application/json')
-
-
-# create a route to delete one document based on its ID
-@app.route('/delete/<document_id>/', methods=['DELETE'])
-def delete(document_id):
-    print("Deleting Data with Document ID:", document_id)
-    response = MongoAPI().delete(document_id)
-    return Response(response=json.dumps(response),
-                    status=202,
-                    mimetype='application/json')
-
-
-
-if __name__ == "__main__":
-    app.run(debug=True, use_reloader=True, host='0.0.0.0', port=5001)
+if __name__ == '__main__':
+    app.run(debug=True)
