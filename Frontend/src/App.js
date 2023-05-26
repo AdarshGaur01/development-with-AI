@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './App.css';
+import logo from './tech.jpeg';
 
 function App() {
   const [data, setData] = useState([]);
@@ -18,7 +19,6 @@ function App() {
       .get('http://127.0.0.1:5000/data')
       .then((response) => {
         setData(response.data);
-        console.log(response)
         setError(null);
       })
       .catch((error) => {
@@ -61,8 +61,9 @@ function App() {
   const updateRow = (index) => {
     if (editableRowIndex === index) {
       // Save the updated values to the database
+      const updatedRow = data[index];
       axios
-        .put('http://127.0.0.1:5000/data', data[index])
+        .put('http://127.0.0.1:5000/data', updatedRow)
         .then(() => {
           fetchData(); // Refresh the data after successful update
           console.log('Row updated');
@@ -72,7 +73,12 @@ function App() {
         });
       setEditableRowIndex(-1);
     } else {
+      // Set the index of the row to be edited
       setEditableRowIndex(index);
+      // Clone the data array to preserve the original data
+      const clonedData = [...data];
+      // Set the values of the row to be edited in the formData state
+      setFormData({ ...clonedData[index] });
     }
   };
 
@@ -82,7 +88,8 @@ function App() {
 
   return (
     <div className="app-container">
-      <h2>Table</h2>
+      <img src={logo} alt="Techolution Logo" className="logo" />
+      <h2>Employees</h2>
       {data.length > 0 ? (
         <>
           <table className="data-table">
@@ -103,7 +110,7 @@ function App() {
                         <input
                           type="text"
                           name={Object.keys(data[0])[colIndex]}
-                          value={value}
+                          value={formData[Object.keys(data[0])[colIndex]] || ''}
                           onChange={handleInputChange}
                         />
                       ) : (
@@ -116,7 +123,10 @@ function App() {
                       <>
                         <button
                           className="cancel-button"
-                          onClick={() => setEditableRowIndex(-1)}
+                          onClick={() => {
+                            setEditableRowIndex(-1);
+                            setFormData({});
+                          }}
                         >
                           <span role="img" aria-label="Cancel">
                             ❌
