@@ -40,10 +40,18 @@ def extract_and_store_data():
 def create_data():
     try:
         data = request.get_json()
+
+        # Replace None values with a space
+        for key, value in data.items():
+            if value is None:
+                data[key] = ' '
+
         result = collection.insert_one(data)
         return jsonify({'message': 'Data created', 'id': str(result.inserted_id)})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
 
 # Read
 @app.route('/data', methods=['GET'])
@@ -74,17 +82,22 @@ def get_data(data_id):
         return jsonify({'error': str(e)}), 500
 
 # Update
+# ... existing code ...
 @app.route('/data/<data_id>', methods=['PUT'])
 def update_data(data_id):
     try:
         data = request.get_json()
+        data.pop('_id', None)  # Remove the _id field from the update data
         result = collection.update_one({'_id': ObjectId(data_id)}, {'$set': data})
         if result.modified_count > 0:
             return jsonify({'message': 'Data updated'})
         else:
             return jsonify({'message': 'Data not found'})
     except Exception as e:
+        print('Error updating data:', e)
         return jsonify({'error': str(e)}), 500
+
+# ... remaining code ...
 
 # Delete
 @app.route('/data/<data_id>', methods=['DELETE'])

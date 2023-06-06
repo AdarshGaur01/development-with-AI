@@ -28,8 +28,23 @@ function App() {
   };
 
   const handleInputChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    const updatedValue = value !== '' ? value : ' '; // Replace empty value with space
+  
+    setFormData((prevData) => {
+      // Clone the previous formData
+      const updatedData = { ...prevData };
+  
+      // Add or update the field value
+      updatedData[name] = updatedValue;
+  
+      return updatedData;
+    });
   };
+  
+  
+  
+  
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -47,8 +62,10 @@ function App() {
 
   const deleteRow = (index) => {
     const rowToDelete = data[index];
+    const idToDelete = rowToDelete._id; // Get the _id of the row
+  
     axios
-      .delete('http://127.0.0.1:5000/data', { data: rowToDelete })
+      .delete(`http://127.0.0.1:5000/data/${idToDelete}`)
       .then(() => {
         fetchData(); // Refresh the data after successful deletion
         console.log('Row deleted');
@@ -57,30 +74,53 @@ function App() {
         console.error('Error deleting row: ', error);
       });
   };
+  
+// ... existing code ...
 
-  const updateRow = (index) => {
-    if (editableRowIndex === index) {
-      // Save the updated values to the database
-      const updatedRow = data[index];
-      axios
-        .put('http://127.0.0.1:5000/data', updatedRow)
-        .then(() => {
-          fetchData(); // Refresh the data after successful update
-          console.log('Row updated');
-        })
-        .catch((error) => {
-          console.error('Error updating row: ', error);
-        });
+const updateRow = (index) => {
+  if (editableRowIndex === index) {
+    // Prepare the updated fields for the specific row
+    const updatedFields = {};
+    Object.keys(formData).forEach((key) => {
+      if (formData[key] !== data[index][key]) {
+        updatedFields[key] = formData[key];
+      }
+    });
+    if (Object.keys(updatedFields).length === 0) {
+      // No fields were changed, exit update mode
       setEditableRowIndex(-1);
-    } else {
-      // Set the index of the row to be edited
-      setEditableRowIndex(index);
-      // Clone the data array to preserve the original data
-      const clonedData = [...data];
-      // Set the values of the row to be edited in the formData state
-      setFormData({ ...clonedData[index] });
+      setFormData({});
+      return;
     }
-  };
+
+    // Save the updated fields to the database
+    const updatedRow = { _id: data[index]._id, ...updatedFields }; // Include the _id of the row being updated
+    axios
+      .put(`http://127.0.0.1:5000/data/${data[index]._id}`, updatedRow) // Pass the _id in the URL
+      .then(() => {
+        fetchData(); // Refresh the data after successful update
+        console.log('Row updated');
+      })
+      .catch((error) => {
+        console.error('Error updating row: ', error);
+      });
+    setEditableRowIndex(-1);
+    setFormData({});
+  } else {
+    // Set the index of the row to be edited
+    setEditableRowIndex(index);
+    // Clone the data array to preserve the original data
+    const clonedData = [...data];
+    // Set the values of the row to be edited in the formData state
+    setFormData({ ...clonedData[index] });
+  }
+};
+
+// ... remaining code ...
+
+
+// ... remaining code ...
+
 
   const toggleForm = () => {
     setShowForm(!showForm);
@@ -102,68 +142,69 @@ function App() {
               </tr>
             </thead>
             <tbody>
-              {data.map((row, index) => (
-                <tr key={index} className="data-row">
-                  {Object.values(row).map((value, colIndex) => (
-                    <td key={colIndex}>
-                      {editableRowIndex === index ? (
-                        <input
-                          type="text"
-                          name={Object.keys(data[0])[colIndex]}
-                          value={formData[Object.keys(data[0])[colIndex]] || ''}
-                          onChange={handleInputChange}
-                        />
-                      ) : (
-                        value
-                      )}
-                    </td>
-                  ))}
-                  <td className="actions-column">
-                    {editableRowIndex === index ? (
-                      <>
-                        <button
-                          className="cancel-button"
-                          onClick={() => {
-                            setEditableRowIndex(-1);
-                            setFormData({});
-                          }}
-                        >
-                          <span role="img" aria-label="Cancel">
-                            ❌
-                          </span>
-                        </button>
-                        <button
-                          className="update-button"
-                          onClick={() => updateRow(index)}
-                        >
-                          <span role="img" aria-label="Update">
-                            ✅
-                          </span>
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          className="edit-button"
-                          onClick={() => updateRow(index)}
-                        >
-                          <span role="img" aria-label="Edit">
-                            ✏️
-                          </span>
-                        </button>
-                        <button
-                          className="delete-button"
-                          onClick={() => deleteRow(index)}
-                        >
-                          <span role="img" aria-label="Delete">
-                            🗑️
-                          </span>
-                        </button>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))}
+            {data.map((row, index) => (
+  <tr key={index} className="data-row">
+    {Object.values(row).map((value, colIndex) => (
+      <td key={colIndex}>
+        {editableRowIndex === index ? (
+          <input
+            type="text"
+            name={Object.keys(data[0])[colIndex]}
+            value={formData[Object.keys(data[0])[colIndex]] || ''}
+            onChange={handleInputChange}
+          />
+        ) : (
+          value
+        )}
+      </td>
+    ))}
+    <td className="actions-column">
+      {editableRowIndex === index ? (
+        <>
+          <button
+            className="cancel-button"
+            onClick={() => {
+              setEditableRowIndex(-1);
+              setFormData({});
+            }}
+          >
+            <span role="img" aria-label="Cancel">
+              ❌
+            </span>
+          </button>
+          <button
+            className="update-button"
+            onClick={() => updateRow(index)}
+          >
+            <span role="img" aria-label="Update">
+              ✅
+            </span>
+          </button>
+        </>
+      ) : (
+        <>
+          <button
+            className="edit-button"
+            onClick={() => updateRow(index)}
+          >
+            <span role="img" aria-label="Edit">
+              ✏️
+            </span>
+          </button>
+          <button
+            className="delete-button"
+            onClick={() => deleteRow(index)}
+          >
+            <span role="img" aria-label="Delete">
+              🗑️
+            </span>
+          </button>
+        </>
+      )}
+    </td>
+  </tr>
+))}
+
             </tbody>
           </table>
           <button className="add-button" onClick={toggleForm}>
